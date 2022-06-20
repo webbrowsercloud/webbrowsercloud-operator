@@ -1,0 +1,15 @@
+domain: webbrowser.cloud
+layout:
+- go.kubebuilder.io/v3
+projectName: webbrowsercloud-operator
+repo: webbrowsercloud/webbrowsercloud-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: webbrowser.cloud
+  kind: Cluster
+  path: webbrowsercloud/webbrowsercloud-operator/api/v1
+  version: v1
+version: "3"
