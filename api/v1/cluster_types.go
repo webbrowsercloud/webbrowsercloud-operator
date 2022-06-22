@@ -54,8 +54,7 @@ type ClusterSpec struct {
 
 // ClusterStatus defines the observed state of Cluster
 type ClusterStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	Concurrent *int32 `json:"concurrent,omitempty"`
 }
 
 //+kubebuilder:object:root=true

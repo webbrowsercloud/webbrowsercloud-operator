@@ -113,6 +113,10 @@ spec:
             type: object
           status:
             description: ClusterStatus defines the observed state of Cluster
+            properties:
+              concurrent:
+                format: int32
+                type: integer
             type: object
         type: object
     served: true
