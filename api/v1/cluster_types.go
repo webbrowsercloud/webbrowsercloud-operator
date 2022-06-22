@@ -17,19 +17,39 @@ limitations under the License.
 package v1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+type WorkerAutoscalingSpec struct {
+	MinReplicas *int32 `json:"minReplicas,omitempty"`
+	MaxReplicas int32  `json:"maxReplicas"`
+}
+
+type WorkerSpec struct {
+	Image string `json:"image,omitempty"`
+
+	ImagePullPolicy corev1.PullPolicy `json:"imagePullPolicy,omitempty"`
+
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+
+	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
+
+	Autoscaling WorkerAutoscalingSpec `json:"autoscaling,omitempty"`
+}
+
 // ClusterSpec defines the desired state of Cluster
 type ClusterSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	Image string `json:"image,omitempty"`
 
-	// Foo is an example field of Cluster. Edit cluster_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	ImagePullPolicy corev1.PullPolicy `json:"imagePullPolicy,omitempty"`
+
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+
+	Worker WorkerSpec `json:"worker,omitempty"`
 }
 
 // ClusterStatus defines the observed state of Cluster

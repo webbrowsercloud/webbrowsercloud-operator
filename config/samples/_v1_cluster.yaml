@@ -1,6 +1,19 @@
 apiVersion: webbrowser.cloud/v1
 kind: Cluster
 metadata:
-  name: cluster-sample
+  name: sample
+  namespace: web-browser-cloud-sample
 spec:
-  # TODO(user): Add fields here
+  image: ppchen7247/webbrowsercloud-cluster:v1.1.4
+  worker:
+    image: browserless/chrome:1.53-chrome-stable
+    resources:
+      requests:
+        cpu: 2000m
+        memory: 2Gi
+      limits:
+        cpu: 4000m
+        memory: 4Gi
+    autoscaling:
+      minReplicas: 3
+      maxReplicas: 10
