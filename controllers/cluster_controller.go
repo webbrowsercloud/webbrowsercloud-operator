@@ -503,6 +503,171 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, 
 
 	selector := &metav1.LabelSelector{MatchLabels: labels}
 
+	env := []corev1.EnvVar{
+		{
+			Name: "HOST",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "status.podIP",
+				},
+			},
+		},
+	}
+
+	if cluster.Spec.MaxConcurrentSessions != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "MAX_CONCURRENT_SESSIONS",
+			Value: fmt.Sprint(*cluster.Spec.MaxConcurrentSessions),
+		})
+	}
+
+	if cluster.Spec.ConnectionTimeout != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "CONNECTION_TIMEOUT",
+			Value: fmt.Sprint(*cluster.Spec.ConnectionTimeout),
+		})
+	}
+
+	if cluster.Spec.MaxQueueLength != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "MAX_QUEUE_LENGTH",
+			Value: fmt.Sprint(*cluster.Spec.MaxQueueLength),
+		})
+	}
+
+	if cluster.Spec.PrebootChrome != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "PREBOOT_CHROME",
+			Value: fmt.Sprint(*cluster.Spec.PrebootChrome),
+		})
+	}
+
+	if cluster.Spec.DemoMode != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "DEMO_MODE",
+			Value: fmt.Sprint(*cluster.Spec.DemoMode),
+		})
+	}
+
+	if cluster.Spec.WorkspaceDeleteExpired != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "WORKSPACE_DELETE_EXPIRED",
+			Value: fmt.Sprint(*cluster.Spec.WorkspaceDeleteExpired),
+		})
+	}
+
+	if cluster.Spec.WorkspaceExpireDays != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "WORKSPACE_EXPIRE_DAYS",
+			Value: fmt.Sprint(*cluster.Spec.WorkspaceExpireDays),
+		})
+	}
+
+	if cluster.Spec.EnableDebugger != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "ENABLE_DEBUGGER",
+			Value: fmt.Sprint(*cluster.Spec.EnableDebugger),
+		})
+	}
+
+	if cluster.Spec.DisableAutoSetDownloadBehavior != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "DISABLE_AUTO_SET_DOWNLOAD_BEHAVIOR",
+			Value: fmt.Sprint(*cluster.Spec.DisableAutoSetDownloadBehavior),
+		})
+	}
+
+	if cluster.Spec.EnableCORS != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "ENABLE_CORS",
+			Value: fmt.Sprint(*cluster.Spec.EnableCORS),
+		})
+	}
+
+	if cluster.Spec.EnableXVFB != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "ENABLE_XVFB",
+			Value: fmt.Sprint(*cluster.Spec.EnableXVFB),
+		})
+	}
+
+	if cluster.Spec.ExitOnHealthFailure != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "EXIT_ON_HEALTH_FAILURE",
+			Value: fmt.Sprint(*cluster.Spec.ExitOnHealthFailure),
+		})
+	}
+
+	if cluster.Spec.FunctionBuiltIns != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "FUNCTION_BUILT_INS",
+			Value: *cluster.Spec.FunctionBuiltIns,
+		})
+	}
+
+	if cluster.Spec.FunctionExternals != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "FUNCTION_EXTERNALS",
+			Value: *cluster.Spec.FunctionExternals,
+		})
+	}
+
+	if cluster.Spec.KeepAlive != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "KEEP_ALIVE",
+			Value: fmt.Sprint(*cluster.Spec.KeepAlive),
+		})
+	}
+
+	if cluster.Spec.DefaultBlockAds != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "DEFAULT_BLOCK_ADS",
+			Value: fmt.Sprint(*cluster.Spec.DefaultBlockAds),
+		})
+	}
+
+	if cluster.Spec.DefaultHeadless != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "DEFAULT_HEADLESS",
+			Value: fmt.Sprint(*cluster.Spec.DefaultHeadless),
+		})
+	}
+
+	if cluster.Spec.DefaultLaunchArgs != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "DEFAULT_LAUNCH_ARGS",
+			Value: *cluster.Spec.DefaultLaunchArgs,
+		})
+	}
+
+	if cluster.Spec.DefaultIgnoreHttpsErrors != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "DEFAULT_IGNORE_HTTPS_ERRORS",
+			Value: fmt.Sprint(*cluster.Spec.DefaultIgnoreHttpsErrors),
+		})
+	}
+
+	if cluster.Spec.DefaultIgnoreDefaultArgs != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "DEFAULT_IGNORE_DEFAULT_ARGS",
+			Value: fmt.Sprint(*cluster.Spec.DefaultIgnoreDefaultArgs),
+		})
+	}
+
+	if cluster.Spec.DisabledFeatures != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "DISABLED_FEATURES",
+			Value: *cluster.Spec.DisabledFeatures,
+		})
+	}
+
+	if cluster.Spec.FunctionEnableIncognitoMode != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "FUNCTION_ENABLE_INCOGNITO_MODE",
+			Value: fmt.Sprint(*cluster.Spec.FunctionEnableIncognitoMode),
+		})
+	}
+
 	deployment := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "apps/v1",
@@ -538,104 +703,7 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, 
 									HostPort:      3000,
 								},
 							},
-							Env: []corev1.EnvVar{
-								{
-									Name: "HOST",
-									ValueFrom: &corev1.EnvVarSource{
-										FieldRef: &corev1.ObjectFieldSelector{
-											FieldPath: "status.podIP",
-										},
-									},
-								},
-								{
-									Name:  "MAX_CONCURRENT_SESSIONS",
-									Value: fmt.Sprint(*cluster.Spec.MaxConcurrentSessions),
-								},
-								{
-									Name:  "CONNECTION_TIMEOUT",
-									Value: fmt.Sprint(*cluster.Spec.ConnectionTimeout),
-								},
-								{
-									Name:  "MAX_QUEUE_LENGTH",
-									Value: fmt.Sprint(*cluster.Spec.MaxQueueLength),
-								},
-								{
-									Name:  "PREBOOT_CHROME",
-									Value: fmt.Sprint(*cluster.Spec.PrebootChrome),
-								},
-								{
-									Name:  "DEMO_MODE",
-									Value: fmt.Sprint(*cluster.Spec.DemoMode),
-								},
-								{
-									Name:  "WORKSPACE_DELETE_EXPIRED",
-									Value: fmt.Sprint(*cluster.Spec.WorkspaceDeleteExpired),
-								},
-								{
-									Name:  "WORKSPACE_EXPIRE_DAYS",
-									Value: fmt.Sprint(*cluster.Spec.WorkspaceExpireDays),
-								},
-								{
-									Name:  "ENABLE_DEBUGGER",
-									Value: fmt.Sprint(*cluster.Spec.EnableDebugger),
-								},
-								{
-									Name:  "DISABLE_AUTO_SET_DOWNLOAD_BEHAVIOR",
-									Value: fmt.Sprint(*cluster.Spec.DisableAutoSetDownloadBehavior),
-								},
-								{
-									Name:  "ENABLE_CORS",
-									Value: fmt.Sprint(*cluster.Spec.EnableCORS),
-								},
-								{
-									Name:  "ENABLE_XVFB",
-									Value: fmt.Sprint(*cluster.Spec.EnableXVFB),
-								},
-								{
-									Name:  "EXIT_ON_HEALTH_FAILURE",
-									Value: fmt.Sprint(*cluster.Spec.ExitOnHealthFailure),
-								},
-								{
-									Name:  "FUNCTION_BUILT_INS",
-									Value: *cluster.Spec.FunctionBuiltIns,
-								},
-								{
-									Name:  "FUNCTION_EXTERNALS",
-									Value: *cluster.Spec.FunctionExternals,
-								},
-								{
-									Name:  "KEEP_ALIVE",
-									Value: fmt.Sprint(*cluster.Spec.KeepAlive),
-								},
-								{
-									Name:  "DEFAULT_BLOCK_ADS",
-									Value: fmt.Sprint(*cluster.Spec.DefaultBlockAds),
-								},
-								{
-									Name:  "DEFAULT_HEADLESS",
-									Value: fmt.Sprint(*cluster.Spec.DefaultHeadless),
-								},
-								{
-									Name:  "DEFAULT_LAUNCH_ARGS",
-									Value: *cluster.Spec.DefaultLaunchArgs,
-								},
-								{
-									Name:  "DEFAULT_IGNORE_HTTPS_ERRORS",
-									Value: fmt.Sprint(*cluster.Spec.DefaultIgnoreHttpsErrors),
-								},
-								{
-									Name:  "DEFAULT_IGNORE_DEFAULT_ARGS",
-									Value: fmt.Sprint(*cluster.Spec.DefaultIgnoreDefaultArgs),
-								},
-								{
-									Name:  "DISABLED_FEATURES",
-									Value: *cluster.Spec.DisabledFeatures,
-								},
-								{
-									Name:  "FUNCTION_ENABLE_INCOGNITO_MODE",
-									Value: fmt.Sprint(*cluster.Spec.FunctionEnableIncognitoMode),
-								},
-							},
+							Env: env,
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "userdata",
