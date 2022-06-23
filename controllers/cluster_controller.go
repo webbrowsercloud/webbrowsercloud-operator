@@ -138,6 +138,7 @@ func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&webbrowsercloudv1.Cluster{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
+		Owns(&corev1.Secret{}).
 		Owns(&corev1.PersistentVolumeClaim{}).
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&rbacv1.Role{}).
@@ -350,6 +351,31 @@ func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context,
 
 	selector := &metav1.LabelSelector{MatchLabels: labels}
 
+	env := []corev1.EnvVar{
+		{
+			Name: "KUBE_NAMESPACE",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "metadata.namespace",
+				},
+			},
+		},
+	}
+
+	if cluster.Spec.TokenSecretName != nil {
+		env = append(env, corev1.EnvVar{
+			Name: "TOKEN",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					Key: "token",
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: *cluster.Spec.TokenSecretName,
+					},
+				},
+			},
+		})
+	}
+
 	deployment := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "apps/v1",
@@ -373,7 +399,7 @@ func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context,
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:            cluster.Name,
+							Name:            "cluster",
 							Image:           cluster.Spec.Image,
 							ImagePullPolicy: cluster.Spec.ImagePullPolicy,
 							Ports: []corev1.ContainerPort{
@@ -383,16 +409,7 @@ func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context,
 									HostPort:      3000,
 								},
 							},
-							Env: []corev1.EnvVar{
-								{
-									Name: "KUBE_NAMESPACE",
-									ValueFrom: &corev1.EnvVarSource{
-										FieldRef: &corev1.ObjectFieldSelector{
-											FieldPath: "metadata.namespace",
-										},
-									},
-								},
-							},
+							Env: env,
 						},
 					},
 					ImagePullSecrets:   cluster.Spec.ImagePullSecrets,
@@ -710,7 +727,7 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, 
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:            cluster.Name,
+							Name:            "worker",
 							Image:           cluster.Spec.Worker.Image,
 							ImagePullPolicy: cluster.Spec.Worker.ImagePullPolicy,
 							Resources:       cluster.Spec.Worker.Resources,

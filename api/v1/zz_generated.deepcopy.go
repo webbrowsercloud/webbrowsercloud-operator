@@ -94,6 +94,11 @@ func (in *ClusterSpec) DeepCopyInto(out *ClusterSpec) {
 		copy(*out, *in)
 	}
 	in.Worker.DeepCopyInto(&out.Worker)
+	if in.TokenSecretName != nil {
+		in, out := &in.TokenSecretName, &out.TokenSecretName
+		*out = new(string)
+		**out = **in
+	}
 	if in.MaxConcurrentSessions != nil {
 		in, out := &in.MaxConcurrentSessions, &out.MaxConcurrentSessions
 		*out = new(int32)
