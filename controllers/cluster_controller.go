@@ -91,6 +91,24 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	if err := r.CreateOrUpdateUserDataPersistentVolumeClaim(ctx, cluster); err != nil {
+		log.Error(err, "unable to create or update user data persistent volume claim")
+
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	if err := r.CreateOrUpdateWorkspacePersistentVolumeClaim(ctx, cluster); err != nil {
+		log.Error(err, "unable to create or update workspace persistent volume claim")
+
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	if err := r.CreateOrUpdateClusterDeployment(ctx, cluster); err != nil {
+		log.Error(err, "unable to create or update cluster deployment")
+
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
 	if err := r.CreateOrUpdateClusterDeployment(ctx, cluster); err != nil {
 		log.Error(err, "unable to create or update cluster deployment")
 
@@ -118,31 +136,11 @@ func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&webbrowsercloudv1.Cluster{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
+		Owns(&corev1.PersistentVolumeClaim{}).
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
 		Complete(r)
-}
-
-func (r *ClusterReconciler) CreateOrUpdateDeployment(ctx context.Context, deploy *appsv1.Deployment) error {
-	found := &appsv1.Deployment{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: deploy.Name, Namespace: deploy.Namespace}, found); err != nil {
-		if !errors.IsNotFound(err) {
-			return err
-		}
-
-		if err := r.Client.Create(ctx, deploy); err != nil {
-			return err
-		}
-	} else if !equality.Semantic.DeepDerivative(deploy.Spec, found.Spec) {
-		found.Spec = deploy.Spec
-
-		if err := r.Client.Update(ctx, found); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func (r *ClusterReconciler) CreateOrUpdateService(ctx context.Context, new *corev1.Service) error {
@@ -159,6 +157,48 @@ func (r *ClusterReconciler) CreateOrUpdateService(ctx context.Context, new *core
 		old.Spec = new.Spec
 
 		if err := r.Client.Update(ctx, old); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *ClusterReconciler) CreateOrUpdatePersistentVolumeClaim(ctx context.Context, new *corev1.PersistentVolumeClaim) error {
+	old := &corev1.PersistentVolumeClaim{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: new.Name, Namespace: new.Namespace}, old); err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+
+		if err := r.Client.Create(ctx, new); err != nil {
+			return err
+		}
+	} else if !equality.Semantic.DeepDerivative(new.Spec.Resources.Requests, old.Spec.Resources.Requests) {
+		old.Spec.Resources.Requests = new.Spec.Resources.Requests
+
+		if err := r.Client.Update(ctx, old); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *ClusterReconciler) CreateOrUpdateDeployment(ctx context.Context, deploy *appsv1.Deployment) error {
+	found := &appsv1.Deployment{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: deploy.Name, Namespace: deploy.Namespace}, found); err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+
+		if err := r.Client.Create(ctx, deploy); err != nil {
+			return err
+		}
+	} else if !equality.Semantic.DeepDerivative(deploy.Spec, found.Spec) {
+		found.Spec = deploy.Spec
+
+		if err := r.Client.Update(ctx, found); err != nil {
 			return err
 		}
 	}
@@ -396,6 +436,66 @@ func (r *ClusterReconciler) CreateOrUpdateClusterService(ctx context.Context, cl
 	return r.CreateOrUpdateService(ctx, service)
 }
 
+func (r *ClusterReconciler) CreateOrUpdateUserDataPersistentVolumeClaim(ctx context.Context, cluster *webbrowsercloudv1.Cluster) error {
+	pvc := &corev1.PersistentVolumeClaim{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "PersistentVolumeClaim",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + "-userdata",
+			Namespace: cluster.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(cluster, schema.GroupVersionKind{
+					Group:   webbrowsercloudv1.GroupVersion.Group,
+					Version: webbrowsercloudv1.GroupVersion.Version,
+					Kind:    cluster.Kind,
+				}),
+			},
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: cluster.Spec.UserDataStorageSize,
+				},
+			},
+		},
+	}
+
+	return r.CreateOrUpdatePersistentVolumeClaim(ctx, pvc)
+}
+
+func (r *ClusterReconciler) CreateOrUpdateWorkspacePersistentVolumeClaim(ctx context.Context, cluster *webbrowsercloudv1.Cluster) error {
+	pvc := &corev1.PersistentVolumeClaim{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "PersistentVolumeClaim",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + "-workspace",
+			Namespace: cluster.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(cluster, schema.GroupVersionKind{
+					Group:   webbrowsercloudv1.GroupVersion.Group,
+					Version: webbrowsercloudv1.GroupVersion.Version,
+					Kind:    cluster.Kind,
+				}),
+			},
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: cluster.Spec.WorkspaceStorageSize,
+				},
+			},
+		},
+	}
+
+	return r.CreateOrUpdatePersistentVolumeClaim(ctx, pvc)
+}
+
 func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, cluster *webbrowsercloudv1.Cluster) error {
 	labels := map[string]string{"cluster": cluster.Name, "component": "worker"}
 
@@ -434,6 +534,16 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, 
 									Protocol:      "TCP",
 									ContainerPort: 3000,
 									HostPort:      3000,
+								},
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      cluster.Name + "-userdata",
+									MountPath: "/usr/src/app/userdata",
+								},
+								{
+									Name:      cluster.Name + "-workspace",
+									MountPath: "/usr/src/app/workspace",
 								},
 							},
 						},

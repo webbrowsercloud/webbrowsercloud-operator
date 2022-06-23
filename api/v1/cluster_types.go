@@ -19,6 +19,8 @@ package v1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -50,6 +52,58 @@ type ClusterSpec struct {
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 
 	Worker WorkerSpec `json:"worker,omitempty"`
+
+	MaxConcurrentSessions *int32 `json:"maxConcurrentSessions,omitempty"`
+
+	ConnectionTimeout *int32 `json:"connectionTimeout,omitempty"`
+
+	MaxQueueLength *int32 `json:"maxQueueLength,omitempty"`
+
+	PrebootChrome *bool `json:"prebootChrome,omitempty"`
+
+	DemoMode *bool `json:"demoMode,omitempty"`
+
+	UserDataStorageSize resource.Quantity `json:"userDataStorageSize,omitempty"`
+
+	WorkspaceStorageSize resource.Quantity `json:"workspaceStorageSize,omitempty"`
+
+	WorkspaceDeleteExpired *bool `json:"workspaceDeleteExpired,omitempty"`
+
+	WorkspaceExpireDays *int32 `json:"workspaceExpireDays,omitempty"`
+
+	DisableAutoSetDownloadBehavior *bool `json:"disableAutoSetDownloadBehavior,omitempty"`
+
+	EnableDebugger *bool `json:"enableDebugger,omitempty"`
+
+	EnableCORS *bool `json:"enableCORS,omitempty"`
+
+	EnableXVFB *bool `json:"enableXVFB,omitempty"`
+
+	ExitOnHealthFailure *bool `json:"exitOnHealthFailure,omitempty"`
+
+	FunctionBuiltIns *bool `json:"functionBuiltIns,omitempty"`
+
+	FunctionExternals *bool `json:"functionExternals,omitempty"`
+
+	KeepAlive *bool `json:"keepAlive,omitempty"`
+
+	ChromeRefreshTime *int32 `json:"chromeRefreshTime,omitempty"`
+
+	SingleRun *bool `json:"singleRun,omitempty"`
+
+	DefaultBlockAds *bool `json:"defaultBlockAds,omitempty"`
+
+	DefaultHeadless *bool `json:"defaultHeadless,omitempty"`
+
+	DefaultLaunchArgs *string `json:"defaultLaunchArgs,omitempty"`
+
+	DefaultIgnoreHttpsErrors *bool `json:"defaultIgnoreHttpsErrors,omitempty"`
+
+	DefaultIgnoreDefaultArgs *bool `json:"defaultIgnoreDefaultArgs,omitempty"`
+
+	DisabledFeatures *string `json:"disabledFeatures,omitempty"`
+
+	FunctionEnableIncognitoMode *bool `json:"functionEnableIncognitoMode,omitempty"`
 }
 
 // ClusterStatus defines the observed state of Cluster

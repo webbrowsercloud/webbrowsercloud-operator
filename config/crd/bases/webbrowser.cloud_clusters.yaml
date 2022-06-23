@@ -35,6 +35,42 @@ spec:
           spec:
             description: ClusterSpec defines the desired state of Cluster
             properties:
+              chromeRefreshTime:
+                format: int32
+                type: integer
+              connectionTimeout:
+                format: int32
+                type: integer
+              defaultBlockAds:
+                type: boolean
+              defaultHeadless:
+                type: boolean
+              defaultIgnoreDefaultArgs:
+                type: boolean
+              defaultIgnoreHttpsErrors:
+                type: boolean
+              defaultLaunchArgs:
+                type: string
+              demoMode:
+                type: boolean
+              disableAutoSetDownloadBehavior:
+                type: boolean
+              disabledFeatures:
+                type: string
+              enableCORS:
+                type: boolean
+              enableDebugger:
+                type: boolean
+              enableXVFB:
+                type: boolean
+              exitOnHealthFailure:
+                type: boolean
+              functionBuiltIns:
+                type: boolean
+              functionEnableIncognitoMode:
+                type: boolean
+              functionExternals:
+                type: boolean
               image:
                 type: string
               imagePullPolicy:
@@ -52,6 +88,24 @@ spec:
                       type: string
                   type: object
                 type: array
+              keepAlive:
+                type: boolean
+              maxConcurrentSessions:
+                format: int32
+                type: integer
+              maxQueueLength:
+                format: int32
+                type: integer
+              prebootChrome:
+                type: boolean
+              singleRun:
+                type: boolean
+              userDataStorageSize:
+                anyOf:
+                - type: integer
+                - type: string
+                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                x-kubernetes-int-or-string: true
               worker:
                 properties:
                   autoscaling:
@@ -110,6 +164,17 @@ spec:
                         type: object
                     type: object
                 type: object
+              workspaceDeleteExpired:
+                type: boolean
+              workspaceExpireDays:
+                format: int32
+                type: integer
+              workspaceStorageSize:
+                anyOf:
+                - type: integer
+                - type: string
+                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                x-kubernetes-int-or-string: true
             type: object
           status:
             description: ClusterStatus defines the observed state of Cluster
