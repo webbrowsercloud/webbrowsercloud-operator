@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	"fmt"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -535,6 +536,104 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, 
 									Protocol:      "TCP",
 									ContainerPort: 3000,
 									HostPort:      3000,
+								},
+							},
+							Env: []corev1.EnvVar{
+								{
+									Name: "HOST",
+									ValueFrom: &corev1.EnvVarSource{
+										FieldRef: &corev1.ObjectFieldSelector{
+											FieldPath: "status.podIP",
+										},
+									},
+								},
+								{
+									Name:  "MAX_CONCURRENT_SESSIONS",
+									Value: fmt.Sprint(*cluster.Spec.MaxConcurrentSessions),
+								},
+								{
+									Name:  "CONNECTION_TIMEOUT",
+									Value: fmt.Sprint(*cluster.Spec.ConnectionTimeout),
+								},
+								{
+									Name:  "MAX_QUEUE_LENGTH",
+									Value: fmt.Sprint(*cluster.Spec.MaxQueueLength),
+								},
+								{
+									Name:  "PREBOOT_CHROME",
+									Value: fmt.Sprint(*cluster.Spec.PrebootChrome),
+								},
+								{
+									Name:  "DEMO_MODE",
+									Value: fmt.Sprint(*cluster.Spec.DemoMode),
+								},
+								{
+									Name:  "WORKSPACE_DELETE_EXPIRED",
+									Value: fmt.Sprint(*cluster.Spec.WorkspaceDeleteExpired),
+								},
+								{
+									Name:  "WORKSPACE_EXPIRE_DAYS",
+									Value: fmt.Sprint(*cluster.Spec.WorkspaceExpireDays),
+								},
+								{
+									Name:  "ENABLE_DEBUGGER",
+									Value: fmt.Sprint(*cluster.Spec.EnableDebugger),
+								},
+								{
+									Name:  "DISABLE_AUTO_SET_DOWNLOAD_BEHAVIOR",
+									Value: fmt.Sprint(*cluster.Spec.DisableAutoSetDownloadBehavior),
+								},
+								{
+									Name:  "ENABLE_CORS",
+									Value: fmt.Sprint(*cluster.Spec.EnableCORS),
+								},
+								{
+									Name:  "ENABLE_XVFB",
+									Value: fmt.Sprint(*cluster.Spec.EnableXVFB),
+								},
+								{
+									Name:  "EXIT_ON_HEALTH_FAILURE",
+									Value: fmt.Sprint(*cluster.Spec.ExitOnHealthFailure),
+								},
+								{
+									Name:  "FUNCTION_BUILT_INS",
+									Value: *cluster.Spec.FunctionBuiltIns,
+								},
+								{
+									Name:  "FUNCTION_EXTERNALS",
+									Value: *cluster.Spec.FunctionExternals,
+								},
+								{
+									Name:  "KEEP_ALIVE",
+									Value: fmt.Sprint(*cluster.Spec.KeepAlive),
+								},
+								{
+									Name:  "DEFAULT_BLOCK_ADS",
+									Value: fmt.Sprint(*cluster.Spec.DefaultBlockAds),
+								},
+								{
+									Name:  "DEFAULT_HEADLESS",
+									Value: fmt.Sprint(*cluster.Spec.DefaultHeadless),
+								},
+								{
+									Name:  "DEFAULT_LAUNCH_ARGS",
+									Value: *cluster.Spec.DefaultLaunchArgs,
+								},
+								{
+									Name:  "DEFAULT_IGNORE_HTTPS_ERRORS",
+									Value: fmt.Sprint(*cluster.Spec.DefaultIgnoreHttpsErrors),
+								},
+								{
+									Name:  "DEFAULT_IGNORE_DEFAULT_ARGS",
+									Value: fmt.Sprint(*cluster.Spec.DefaultIgnoreDefaultArgs),
+								},
+								{
+									Name:  "DISABLED_FEATURES",
+									Value: *cluster.Spec.DisabledFeatures,
+								},
+								{
+									Name:  "FUNCTION_ENABLE_INCOGNITO_MODE",
+									Value: fmt.Sprint(*cluster.Spec.FunctionEnableIncognitoMode),
 								},
 							},
 							VolumeMounts: []corev1.VolumeMount{

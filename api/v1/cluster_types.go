@@ -81,9 +81,9 @@ type ClusterSpec struct {
 
 	ExitOnHealthFailure *bool `json:"exitOnHealthFailure,omitempty"`
 
-	FunctionBuiltIns *bool `json:"functionBuiltIns,omitempty"`
+	FunctionBuiltIns *string `json:"functionBuiltIns,omitempty"`
 
-	FunctionExternals *bool `json:"functionExternals,omitempty"`
+	FunctionExternals *string `json:"functionExternals,omitempty"`
 
 	KeepAlive *bool `json:"keepAlive,omitempty"`
 

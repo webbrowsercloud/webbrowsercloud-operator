@@ -66,11 +66,11 @@ spec:
               exitOnHealthFailure:
                 type: boolean
               functionBuiltIns:
-                type: boolean
+                type: string
               functionEnableIncognitoMode:
                 type: boolean
               functionExternals:
-                type: boolean
+                type: string
               image:
                 type: string
               imagePullPolicy:
