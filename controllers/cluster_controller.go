@@ -539,17 +539,35 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, 
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
-									Name:      cluster.Name + "-userdata",
+									Name:      "userdata",
 									MountPath: "/usr/src/app/userdata",
 								},
 								{
-									Name:      cluster.Name + "-workspace",
+									Name:      "workspace",
 									MountPath: "/usr/src/app/workspace",
 								},
 							},
 						},
 					},
 					ImagePullSecrets: cluster.Spec.Worker.ImagePullSecrets,
+					Volumes: []corev1.Volume{
+						{
+							Name: "userdata",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: cluster.Name + "-userdata",
+								},
+							},
+						},
+						{
+							Name: "workspace",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: cluster.Name + "-workspace",
+								},
+							},
+						},
+					},
 				},
 			},
 		},
