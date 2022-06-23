@@ -53,6 +53,8 @@ type ClusterSpec struct {
 
 	Worker WorkerSpec `json:"worker,omitempty"`
 
+	TokenSecretName *string `json:"tokenSecretName,omitempty"`
+
 	MaxConcurrentSessions *int32 `json:"maxConcurrentSessions,omitempty"`
 
 	ConnectionTimeout *int32 `json:"connectionTimeout,omitempty"`

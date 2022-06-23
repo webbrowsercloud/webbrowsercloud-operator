@@ -518,6 +518,20 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, 
 		},
 	}
 
+	if cluster.Spec.TokenSecretName != nil {
+		env = append(env, corev1.EnvVar{
+			Name: "TOKEN",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					Key: "token",
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: *cluster.Spec.TokenSecretName,
+					},
+				},
+			},
+		})
+	}
+
 	if cluster.Spec.MaxConcurrentSessions != nil {
 		env = append(env, corev1.EnvVar{
 			Name:  "MAX_CONCURRENT_SESSIONS",
