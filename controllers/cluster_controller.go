@@ -512,6 +512,10 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, 
 				},
 			},
 		},
+		{
+			Name:  "WORKSPACE_DIR",
+			Value: "/workspace",
+		},
 	}
 
 	if cluster.Spec.MaxConcurrentSessions != nil {
@@ -707,11 +711,11 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, 
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "userdata",
-									MountPath: "/usr/src/app/userdata",
+									MountPath: "/userdata",
 								},
 								{
 									Name:      "workspace",
-									MountPath: "/usr/src/app/workspace",
+									MountPath: "/workspace",
 								},
 							},
 						},
