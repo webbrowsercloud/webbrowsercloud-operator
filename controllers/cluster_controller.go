@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"fmt"
+	"github.com/mitchellh/hashstructure/v2"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -76,6 +77,39 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	var tokenSecretHash string
+	if cluster.Spec.TokenSecretName != nil {
+		tokenSecret := &corev1.Secret{}
+		if err := r.Get(ctx, client.ObjectKey{Name: *cluster.Spec.TokenSecretName, Namespace: cluster.Namespace}, tokenSecret); err != nil {
+			log.Error(err, "unable to fetch token secret")
+
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
+
+		hash, err := hashstructure.Hash(tokenSecret.Data, hashstructure.FormatV2, nil)
+		if err != nil {
+			log.Error(err, "hash 失败")
+
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
+
+		tokenSecretHash = fmt.Sprint(hash)
+
+		if tokenSecretHash != tokenSecret.Annotations["webbrowser.cloud/last-updated-hash"] {
+			if tokenSecret.Annotations == nil {
+				tokenSecret.Annotations = map[string]string{}
+			}
+
+			tokenSecret.Annotations["webbrowser.cloud/last-updated-hash"] = tokenSecretHash
+
+			if err := r.Update(ctx, tokenSecret); err != nil {
+				log.Error(err, "unable to fetch token secret")
+
+				return ctrl.Result{}, client.IgnoreNotFound(err)
+			}
+		}
+	}
+
 	if err := r.CreateOrUpdateClusterServiceAccount(ctx, cluster); err != nil {
 		log.Error(err, "unable to create or update service account")
 
@@ -106,25 +140,19 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if err := r.CreateOrUpdateClusterDeployment(ctx, cluster); err != nil {
-		log.Error(err, "unable to create or update cluster deployment")
-
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-
-	if err := r.CreateOrUpdateClusterDeployment(ctx, cluster); err != nil {
-		log.Error(err, "unable to create or update cluster deployment")
-
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-
 	if err := r.CreateOrUpdateClusterService(ctx, cluster); err != nil {
 		log.Error(err, "unable to create or update cluster service")
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if err := r.CreateOrUpdateWorkerDeployment(ctx, cluster); err != nil {
+	if err := r.CreateOrUpdateClusterDeployment(ctx, cluster, tokenSecretHash); err != nil {
+		log.Error(err, "unable to create or update cluster deployment")
+
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	if err := r.CreateOrUpdateWorkerDeployment(ctx, cluster, tokenSecretHash); err != nil {
 		log.Error(err, "unable to create or update worker deployment")
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -347,7 +375,9 @@ func (r *ClusterReconciler) CreateOrUpdateClusterServiceAccount(ctx context.Cont
 	})
 }
 
-func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context, cluster *webbrowsercloudv1.Cluster) error {
+func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context, cluster *webbrowsercloudv1.Cluster, tokenSecretHash string) error {
+	annotations := map[string]string{}
+
 	labels := map[string]string{"cluster": cluster.Name, "component": "cluster"}
 
 	selector := &metav1.LabelSelector{MatchLabels: labels}
@@ -361,6 +391,10 @@ func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context,
 				},
 			},
 		},
+	}
+
+	if tokenSecretHash != "" {
+		annotations["webbrowser.cloud/token-secret-hash"] = tokenSecretHash
 	}
 
 	if cluster.Spec.TokenSecretName != nil {
@@ -396,7 +430,10 @@ func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context,
 		Spec: appsv1.DeploymentSpec{
 			Selector: selector,
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: labels},
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: annotations,
+					Labels:      labels,
+				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
@@ -516,7 +553,9 @@ func (r *ClusterReconciler) CreateOrUpdateWorkspacePersistentVolumeClaim(ctx con
 	return r.CreateOrUpdatePersistentVolumeClaim(ctx, pvc)
 }
 
-func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, cluster *webbrowsercloudv1.Cluster) error {
+func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, cluster *webbrowsercloudv1.Cluster, tokenSecretHash string) error {
+	annotations := map[string]string{}
+
 	labels := map[string]string{"cluster": cluster.Name, "component": "worker"}
 
 	selector := &metav1.LabelSelector{MatchLabels: labels}
@@ -534,6 +573,10 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, 
 			Name:  "WORKSPACE_DIR",
 			Value: "/workspace",
 		},
+	}
+
+	if tokenSecretHash != "" {
+		annotations["webbrowser.cloud/token-secret-hash"] = tokenSecretHash
 	}
 
 	if cluster.Spec.TokenSecretName != nil {
@@ -724,7 +767,10 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, 
 			Replicas: cluster.Spec.Worker.Autoscaling.MinReplicas,
 			Selector: selector,
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: labels},
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: annotations,
+					Labels:      labels,
+				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
