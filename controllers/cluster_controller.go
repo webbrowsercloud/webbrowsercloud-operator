@@ -86,26 +86,25 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
 
-		hash, err := hashstructure.Hash(tokenSecret.Data, hashstructure.FormatV2, nil)
-		if err != nil {
-			log.Error(err, "hash 失败")
+		if hash, err := hashstructure.Hash(tokenSecret.Data, hashstructure.FormatV2, nil); err != nil {
+			log.Error(err, "unable to generate token secret hash")
 
 			return ctrl.Result{}, client.IgnoreNotFound(err)
-		}
+		} else {
+			tokenSecretHash = fmt.Sprint(hash)
 
-		tokenSecretHash = fmt.Sprint(hash)
+			if tokenSecretHash != tokenSecret.Annotations["webbrowser.cloud/last-updated-hash"] {
+				if tokenSecret.Annotations == nil {
+					tokenSecret.Annotations = map[string]string{}
+				}
 
-		if tokenSecretHash != tokenSecret.Annotations["webbrowser.cloud/last-updated-hash"] {
-			if tokenSecret.Annotations == nil {
-				tokenSecret.Annotations = map[string]string{}
-			}
+				tokenSecret.Annotations["webbrowser.cloud/last-updated-hash"] = tokenSecretHash
 
-			tokenSecret.Annotations["webbrowser.cloud/last-updated-hash"] = tokenSecretHash
+				if err := r.Update(ctx, tokenSecret); err != nil {
+					log.Error(err, "unable to update token secret")
 
-			if err := r.Update(ctx, tokenSecret); err != nil {
-				log.Error(err, "unable to fetch token secret")
-
-				return ctrl.Result{}, client.IgnoreNotFound(err)
+					return ctrl.Result{}, client.IgnoreNotFound(err)
+				}
 			}
 		}
 	}
