@@ -100,8 +100,6 @@ spec:
                 type: boolean
               singleRun:
                 type: boolean
-              tokenSecretName:
-                type: string
               userDataStorageSize:
                 anyOf:
                 - type: integer

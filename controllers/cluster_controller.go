@@ -68,91 +68,66 @@ type ClusterReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.2/pkg/reconcile
 func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	cluster := &webbrowsercloudv1.Cluster{}
 	if err := r.Get(ctx, req.NamespacedName, cluster); err != nil {
-		log.Error(err, "unable to fetch web browser cluster")
+		logger.Error(err, "unable to fetch web browser cluster")
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	var tokenSecretHash string
-	if cluster.Spec.TokenSecretName != nil {
-		tokenSecret := &corev1.Secret{}
-		if err := r.Get(ctx, client.ObjectKey{Name: *cluster.Spec.TokenSecretName, Namespace: cluster.Namespace}, tokenSecret); err != nil {
-			log.Error(err, "unable to fetch token secret")
+	secret := &corev1.Secret{}
+	if err := r.GetOrCreateClusterSecret(ctx, cluster, secret); err != nil {
+		logger.Error(err, "unable to fetch secret")
 
-			return ctrl.Result{}, client.IgnoreNotFound(err)
-		}
-
-		if hash, err := hashstructure.Hash(tokenSecret.Data, hashstructure.FormatV2, nil); err != nil {
-			log.Error(err, "unable to generate token secret hash")
-
-			return ctrl.Result{}, client.IgnoreNotFound(err)
-		} else {
-			tokenSecretHash = fmt.Sprint(hash)
-
-			if tokenSecretHash != tokenSecret.Annotations["webbrowser.cloud/last-updated-hash"] {
-				if tokenSecret.Annotations == nil {
-					tokenSecret.Annotations = map[string]string{}
-				}
-
-				tokenSecret.Annotations["webbrowser.cloud/last-updated-hash"] = tokenSecretHash
-
-				if err := r.Update(ctx, tokenSecret); err != nil {
-					log.Error(err, "unable to update token secret")
-
-					return ctrl.Result{}, client.IgnoreNotFound(err)
-				}
-			}
-		}
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	if err := r.CreateOrUpdateClusterServiceAccount(ctx, cluster); err != nil {
-		log.Error(err, "unable to create or update service account")
+		logger.Error(err, "unable to create or update service account")
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	if err := r.CreateOrUpdateClusterRole(ctx, cluster); err != nil {
-		log.Error(err, "unable to create or update role")
+		logger.Error(err, "unable to create or update role")
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	if err := r.CreateOrUpdateClusterRoleBinding(ctx, cluster); err != nil {
-		log.Error(err, "unable to create or update role binding")
+		logger.Error(err, "unable to create or update role binding")
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	if err := r.CreateOrUpdateUserDataPersistentVolumeClaim(ctx, cluster); err != nil {
-		log.Error(err, "unable to create or update user data persistent volume claim")
+		logger.Error(err, "unable to create or update user data persistent volume claim")
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	if err := r.CreateOrUpdateWorkspacePersistentVolumeClaim(ctx, cluster); err != nil {
-		log.Error(err, "unable to create or update workspace persistent volume claim")
+		logger.Error(err, "unable to create or update workspace persistent volume claim")
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	if err := r.CreateOrUpdateClusterService(ctx, cluster); err != nil {
-		log.Error(err, "unable to create or update cluster service")
+		logger.Error(err, "unable to create or update cluster service")
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if err := r.CreateOrUpdateClusterDeployment(ctx, cluster, tokenSecretHash); err != nil {
-		log.Error(err, "unable to create or update cluster deployment")
+	if err := r.CreateOrUpdateClusterDeployment(ctx, cluster, secret); err != nil {
+		logger.Error(err, "unable to create or update cluster deployment")
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if err := r.CreateOrUpdateWorkerDeployment(ctx, cluster, tokenSecretHash); err != nil {
-		log.Error(err, "unable to create or update worker deployment")
+	if err := r.CreateOrUpdateWorkerDeployment(ctx, cluster, secret); err != nil {
+		logger.Error(err, "unable to create or update worker deployment")
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -174,9 +149,10 @@ func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *ClusterReconciler) CreateOrUpdateService(ctx context.Context, new *corev1.Service) error {
-	old := &corev1.Service{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: new.Name, Namespace: new.Namespace}, old); err != nil {
+func (r *ClusterReconciler) GetOrCreateSecret(ctx context.Context, new *corev1.Secret, result *corev1.Secret) error {
+	logger := log.FromContext(ctx)
+
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: new.Name, Namespace: new.Namespace}, result); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
 		}
@@ -184,8 +160,52 @@ func (r *ClusterReconciler) CreateOrUpdateService(ctx context.Context, new *core
 		if err := r.Client.Create(ctx, new); err != nil {
 			return err
 		}
+
+		*result = *new
+	} else {
+	}
+
+	if hash, err := hashstructure.Hash(result.Data, hashstructure.FormatV2, nil); err != nil {
+		return err
+	} else {
+		currentHash := fmt.Sprint(hash)
+
+		if currentHash != result.Annotations["webbrowser.cloud/last-updated-hash"] {
+			if result.Annotations == nil {
+				result.Annotations = map[string]string{}
+			}
+
+			result.Annotations["webbrowser.cloud/last-updated-hash"] = currentHash
+
+			logger.Info("starting update secret hash", "hash", currentHash)
+
+			if err := r.Update(ctx, result); err != nil {
+				logger.Error(err, "unable to update secret hash")
+			}
+		}
+	}
+
+	return nil
+}
+
+func (r *ClusterReconciler) CreateOrUpdateService(ctx context.Context, new *corev1.Service) error {
+	logger := log.FromContext(ctx)
+
+	old := &corev1.Service{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: new.Name, Namespace: new.Namespace}, old); err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+
+		logger.Info("starting create service", "name", new.Name)
+
+		if err := r.Client.Create(ctx, new); err != nil {
+			return err
+		}
 	} else if !equality.Semantic.DeepDerivative(new.Spec, old.Spec) {
 		old.Spec = new.Spec
+
+		logger.Info("starting update service", "name", new.Name)
 
 		if err := r.Client.Update(ctx, old); err != nil {
 			return err
@@ -217,17 +237,23 @@ func (r *ClusterReconciler) CreateOrUpdatePersistentVolumeClaim(ctx context.Cont
 }
 
 func (r *ClusterReconciler) CreateOrUpdateDeployment(ctx context.Context, deploy *appsv1.Deployment) error {
+	logger := log.FromContext(ctx)
+
 	found := &appsv1.Deployment{}
 	if err := r.Client.Get(ctx, client.ObjectKey{Name: deploy.Name, Namespace: deploy.Namespace}, found); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
 		}
 
+		logger.Info("starting create deployment", "name", deploy.Name)
+
 		if err := r.Client.Create(ctx, deploy); err != nil {
 			return err
 		}
 	} else if !equality.Semantic.DeepDerivative(deploy.Spec, found.Spec) {
 		found.Spec = deploy.Spec
+
+		logger.Info("starting update deployment", "name", deploy.Name)
 
 		if err := r.Client.Update(ctx, found); err != nil {
 			return err
@@ -299,6 +325,33 @@ func (r *ClusterReconciler) CreateOrUpdateServiceAccount(ctx context.Context, ne
 	}
 
 	return nil
+}
+
+func (r *ClusterReconciler) GetOrCreateClusterSecret(ctx context.Context, cluster *webbrowsercloudv1.Cluster, result *corev1.Secret) error {
+	data := map[string][]byte{
+		"token": []byte(""),
+	}
+
+	secret := &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Secret",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name,
+			Namespace: cluster.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(cluster, schema.GroupVersionKind{
+					Group:   webbrowsercloudv1.GroupVersion.Group,
+					Version: webbrowsercloudv1.GroupVersion.Version,
+					Kind:    cluster.Kind,
+				}),
+			},
+		},
+		Data: data,
+	}
+
+	return r.GetOrCreateSecret(ctx, secret, result)
 }
 
 func (r *ClusterReconciler) CreateOrUpdateClusterRole(ctx context.Context, cluster *webbrowsercloudv1.Cluster) error {
@@ -374,8 +427,10 @@ func (r *ClusterReconciler) CreateOrUpdateClusterServiceAccount(ctx context.Cont
 	})
 }
 
-func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context, cluster *webbrowsercloudv1.Cluster, tokenSecretHash string) error {
-	annotations := map[string]string{}
+func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context, cluster *webbrowsercloudv1.Cluster, secret *corev1.Secret) error {
+	annotations := map[string]string{
+		"webbrowser.cloud/secret-hash": secret.Annotations["webbrowser.cloud/last-updated-hash"],
+	}
 
 	labels := map[string]string{"cluster": cluster.Name, "component": "cluster"}
 
@@ -390,24 +445,17 @@ func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context,
 				},
 			},
 		},
-	}
-
-	if tokenSecretHash != "" {
-		annotations["webbrowser.cloud/token-secret-hash"] = tokenSecretHash
-	}
-
-	if cluster.Spec.TokenSecretName != nil {
-		env = append(env, corev1.EnvVar{
+		{
 			Name: "TOKEN",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
 					Key: "token",
 					LocalObjectReference: corev1.LocalObjectReference{
-						Name: *cluster.Spec.TokenSecretName,
+						Name: cluster.Name,
 					},
 				},
 			},
-		})
+		},
 	}
 
 	deployment := &appsv1.Deployment{
@@ -552,10 +600,15 @@ func (r *ClusterReconciler) CreateOrUpdateWorkspacePersistentVolumeClaim(ctx con
 	return r.CreateOrUpdatePersistentVolumeClaim(ctx, pvc)
 }
 
-func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, cluster *webbrowsercloudv1.Cluster, tokenSecretHash string) error {
-	annotations := map[string]string{}
+func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, cluster *webbrowsercloudv1.Cluster, secret *corev1.Secret) error {
+	annotations := map[string]string{
+		"webbrowser.cloud/secret-hash": secret.Annotations["webbrowser.cloud/last-updated-hash"],
+	}
 
-	labels := map[string]string{"cluster": cluster.Name, "component": "worker"}
+	labels := map[string]string{
+		"cluster":   cluster.Name,
+		"component": "worker",
+	}
 
 	selector := &metav1.LabelSelector{MatchLabels: labels}
 
@@ -569,27 +622,20 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, 
 			},
 		},
 		{
-			Name:  "WORKSPACE_DIR",
-			Value: "/workspace",
-		},
-	}
-
-	if tokenSecretHash != "" {
-		annotations["webbrowser.cloud/token-secret-hash"] = tokenSecretHash
-	}
-
-	if cluster.Spec.TokenSecretName != nil {
-		env = append(env, corev1.EnvVar{
 			Name: "TOKEN",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
 					Key: "token",
 					LocalObjectReference: corev1.LocalObjectReference{
-						Name: *cluster.Spec.TokenSecretName,
+						Name: cluster.Name,
 					},
 				},
 			},
-		})
+		},
+		{
+			Name:  "WORKSPACE_DIR",
+			Value: "/workspace",
+		},
 	}
 
 	if cluster.Spec.MaxConcurrentSessions != nil {
