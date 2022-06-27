@@ -826,9 +826,9 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, 
 							Resources:       cluster.Spec.Worker.Resources,
 							Ports: []corev1.ContainerPort{
 								{
-									Protocol:      "TCP",
 									ContainerPort: 3000,
-									HostPort:      3000,
+									Protocol:      "TCP",
+									Name:          "http",
 								},
 							},
 							Env: env,
