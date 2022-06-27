@@ -490,9 +490,9 @@ func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context,
 							ImagePullPolicy: cluster.Spec.ImagePullPolicy,
 							Ports: []corev1.ContainerPort{
 								{
-									Protocol:      "TCP",
 									ContainerPort: 3000,
-									HostPort:      3000,
+									Protocol:      "TCP",
+									Name:          "http",
 								},
 							},
 							Env: env,
