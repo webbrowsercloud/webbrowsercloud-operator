@@ -475,6 +475,7 @@ func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context,
 			},
 		},
 		Spec: appsv1.DeploymentSpec{
+			Replicas: cluster.Spec.Replicas,
 			Selector: selector,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{

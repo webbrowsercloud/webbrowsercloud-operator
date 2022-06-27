@@ -51,6 +51,8 @@ type ClusterSpec struct {
 
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 
+	Replicas *int32 `json:"replicas,omitempty"`
+
 	Worker WorkerSpec `json:"worker,omitempty"`
 
 	MaxConcurrentSessions *int32 `json:"maxConcurrentSessions,omitempty"`
