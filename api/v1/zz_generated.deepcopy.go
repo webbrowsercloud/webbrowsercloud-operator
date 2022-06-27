@@ -93,6 +93,11 @@ func (in *ClusterSpec) DeepCopyInto(out *ClusterSpec) {
 		*out = make([]corev1.LocalObjectReference, len(*in))
 		copy(*out, *in)
 	}
+	if in.Replicas != nil {
+		in, out := &in.Replicas, &out.Replicas
+		*out = new(int32)
+		**out = **in
+	}
 	in.Worker.DeepCopyInto(&out.Worker)
 	if in.MaxConcurrentSessions != nil {
 		in, out := &in.MaxConcurrentSessions, &out.MaxConcurrentSessions
