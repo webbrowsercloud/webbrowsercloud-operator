@@ -21,6 +21,7 @@ import (
 	"github.com/mitchellh/hashstructure/v2"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -115,7 +116,13 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	if err := r.CreateOrUpdateClusterService(ctx, cluster); err != nil {
-		logger.Error(err, "unable to create or update cluster service")
+		logger.Error(err, "unable to create or update service")
+
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	if err := r.CreateOrUpdateClusterIngress(ctx, cluster); err != nil {
+		logger.Error(err, "unable to create or update ingress")
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -146,6 +153,7 @@ func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
+		Owns(&networkingv1.Ingress{}).
 		Complete(r)
 }
 
@@ -327,6 +335,27 @@ func (r *ClusterReconciler) CreateOrUpdateServiceAccount(ctx context.Context, ne
 	return nil
 }
 
+func (r *ClusterReconciler) CreateOrUpdateIngress(ctx context.Context, new *networkingv1.Ingress) error {
+	old := &networkingv1.Ingress{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: new.Name, Namespace: new.Namespace}, old); err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+
+		if err := r.Client.Create(ctx, new); err != nil {
+			return err
+		}
+	} else if !equality.Semantic.DeepDerivative(new.Spec, old.Spec) {
+		old.Spec = new.Spec
+
+		if err := r.Client.Update(ctx, old); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (r *ClusterReconciler) GetOrCreateClusterSecret(ctx context.Context, cluster *webbrowsercloudv1.Cluster, result *corev1.Secret) error {
 	data := map[string][]byte{
 		"token": []byte(""),
@@ -425,6 +454,72 @@ func (r *ClusterReconciler) CreateOrUpdateClusterServiceAccount(ctx context.Cont
 			},
 		},
 	})
+}
+
+func (r *ClusterReconciler) CreateOrUpdateClusterIngress(ctx context.Context, cluster *webbrowsercloudv1.Cluster) error {
+	if cluster.Spec.Domains == nil || len(*cluster.Spec.Domains) > 0 {
+		r.Delete(ctx, &networkingv1.Ingress{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "networking.k8s.io/v1",
+				Kind:       "Ingress",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      cluster.Name,
+				Namespace: cluster.Namespace,
+			},
+		})
+
+		return nil
+	}
+
+	pathType := networkingv1.PathTypePrefix
+
+	var rules []networkingv1.IngressRule
+	for _, domain := range *cluster.Spec.Domains {
+		rules = append(rules, networkingv1.IngressRule{
+			Host: domain,
+			IngressRuleValue: networkingv1.IngressRuleValue{
+				HTTP: &networkingv1.HTTPIngressRuleValue{
+					Paths: []networkingv1.HTTPIngressPath{
+						{
+							Path:     "/",
+							PathType: &pathType,
+							Backend: networkingv1.IngressBackend{
+								Service: &networkingv1.IngressServiceBackend{
+									Name: cluster.Name,
+									Port: networkingv1.ServiceBackendPort{
+										Name: "http",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		})
+	}
+
+	return r.CreateOrUpdateIngress(ctx, &networkingv1.Ingress{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "networking.k8s.io/v1",
+			Kind:       "Ingress",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name,
+			Namespace: cluster.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(cluster, schema.GroupVersionKind{
+					Group:   webbrowsercloudv1.GroupVersion.Group,
+					Version: webbrowsercloudv1.GroupVersion.Version,
+					Kind:    cluster.Kind,
+				}),
+			},
+		},
+		Spec: networkingv1.IngressSpec{
+			Rules: rules,
+		},
+	})
+
 }
 
 func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context, cluster *webbrowsercloudv1.Cluster, secret *corev1.Secret) error {

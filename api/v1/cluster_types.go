@@ -53,6 +53,8 @@ type ClusterSpec struct {
 
 	Replicas *int32 `json:"replicas,omitempty"`
 
+	Domains *[]string `json:"domains,omitempty"`
+
 	Worker WorkerSpec `json:"worker,omitempty"`
 
 	MaxConcurrentSessions *int32 `json:"maxConcurrentSessions,omitempty"`

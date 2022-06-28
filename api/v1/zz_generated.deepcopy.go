@@ -98,6 +98,15 @@ func (in *ClusterSpec) DeepCopyInto(out *ClusterSpec) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.Domains != nil {
+		in, out := &in.Domains, &out.Domains
+		*out = new([]string)
+		if **in != nil {
+			in, out := *in, *out
+			*out = make([]string, len(*in))
+			copy(*out, *in)
+		}
+	}
 	in.Worker.DeepCopyInto(&out.Worker)
 	if in.MaxConcurrentSessions != nil {
 		in, out := &in.MaxConcurrentSessions, &out.MaxConcurrentSessions

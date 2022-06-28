@@ -57,6 +57,10 @@ spec:
                 type: boolean
               disabledFeatures:
                 type: string
+              domains:
+                items:
+                  type: string
+                type: array
               enableCORS:
                 type: boolean
               enableDebugger:
