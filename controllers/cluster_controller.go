@@ -458,7 +458,7 @@ func (r *ClusterReconciler) CreateOrUpdateClusterServiceAccount(ctx context.Cont
 }
 
 func (r *ClusterReconciler) CreateOrUpdateClusterIngress(ctx context.Context, cluster *webbrowsercloudv1.Cluster) error {
-	if cluster.Spec.Domains == nil || len(*cluster.Spec.Domains) > 0 {
+	if cluster.Spec.Domains == nil || len(*cluster.Spec.Domains) == 0 {
 		r.Delete(ctx, &networkingv1.Ingress{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: "networking.k8s.io/v1",
