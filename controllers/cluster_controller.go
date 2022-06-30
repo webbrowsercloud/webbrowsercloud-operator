@@ -211,7 +211,8 @@ func (r *ClusterReconciler) CreateOrUpdateService(ctx context.Context, new *core
 		if err := r.Client.Create(ctx, new); err != nil {
 			return err
 		}
-	} else if !equality.Semantic.DeepDerivative(new.Spec, old.Spec) {
+	} else if !equality.Semantic.DeepDerivative(new.Labels, old.Labels) || !equality.Semantic.DeepDerivative(new.Spec, old.Spec) {
+		old.Labels = new.Labels
 		old.Spec = new.Spec
 
 		logger.Info("starting update service", "name", new.Name)
@@ -259,7 +260,8 @@ func (r *ClusterReconciler) CreateOrUpdateDeployment(ctx context.Context, deploy
 		if err := r.Client.Create(ctx, deploy); err != nil {
 			return err
 		}
-	} else if !equality.Semantic.DeepDerivative(deploy.Spec, found.Spec) {
+	} else if !equality.Semantic.DeepDerivative(deploy.Labels, found.Labels) || !equality.Semantic.DeepDerivative(deploy.Spec, found.Spec) {
+		found.Labels = deploy.Labels
 		found.Spec = deploy.Spec
 
 		logger.Info("starting update deployment", "name", deploy.Name)
@@ -346,7 +348,9 @@ func (r *ClusterReconciler) CreateOrUpdateIngress(ctx context.Context, new *netw
 		if err := r.Client.Create(ctx, new); err != nil {
 			return err
 		}
-	} else if !equality.Semantic.DeepDerivative(new.Spec, old.Spec) {
+	} else if !equality.Semantic.DeepDerivative(new.Labels, old.Labels) || !equality.Semantic.DeepDerivative(new.Annotations, old.Annotations) || !equality.Semantic.DeepDerivative(new.Spec, old.Spec) {
+		old.Labels = new.Labels
+		old.Annotations = new.Annotations
 		old.Spec = new.Spec
 
 		if err := r.Client.Update(ctx, old); err != nil {
