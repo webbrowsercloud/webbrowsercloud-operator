@@ -562,6 +562,7 @@ func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context,
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cluster.Name + "-cluster",
 			Namespace: cluster.Namespace,
+			Labels:    labels,
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(cluster, schema.GroupVersionKind{
 					Group:   webbrowsercloudv1.GroupVersion.Group,
@@ -897,6 +898,7 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, 
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cluster.Name + "-worker",
 			Namespace: cluster.Namespace,
+			Labels:    labels,
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(cluster, schema.GroupVersionKind{
 					Group:   webbrowsercloudv1.GroupVersion.Group,
