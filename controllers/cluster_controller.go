@@ -532,7 +532,7 @@ func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context,
 		"webbrowser.cloud/secret-hash": secret.Annotations["webbrowser.cloud/last-updated-hash"],
 	}
 
-	labels := map[string]string{"cluster": cluster.Name, "component": "cluster"}
+	labels := map[string]string{"app": cluster.Name, "component": "cluster"}
 
 	selector := &metav1.LabelSelector{MatchLabels: labels}
 
@@ -610,7 +610,7 @@ func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context,
 }
 
 func (r *ClusterReconciler) CreateOrUpdateClusterService(ctx context.Context, cluster *webbrowsercloudv1.Cluster) error {
-	selector := map[string]string{"cluster": cluster.Name, "component": "cluster"}
+	selector := map[string]string{"app": cluster.Name, "component": "cluster"}
 
 	service := &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
@@ -708,7 +708,7 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, 
 	}
 
 	labels := map[string]string{
-		"cluster":   cluster.Name,
+		"app":       cluster.Name,
 		"component": "worker",
 	}
 
