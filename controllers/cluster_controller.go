@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/mitchellh/hashstructure/v2"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -79,9 +80,16 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	secret := &corev1.Secret{}
-	if err := r.GetOrCreateClusterSecret(ctx, cluster, secret); err != nil {
-		logger.Error(err, "unable to fetch secret")
+	tokenSecret := &corev1.Secret{}
+	if err := r.GetOrCreateTokenSecret(ctx, cluster, tokenSecret); err != nil {
+		logger.Error(err, "unable to fetch token secret")
+
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	redisSecret := &corev1.Secret{}
+	if err := r.GetOrCreateRedisSecret(ctx, cluster, redisSecret); err != nil {
+		logger.Error(err, "unable to fetch redis secret")
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -116,26 +124,44 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if err := r.CreateOrUpdateClusterService(ctx, cluster); err != nil {
-		logger.Error(err, "unable to create or update service")
-
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-
 	if err := r.CreateOrUpdateClusterIngress(ctx, cluster); err != nil {
 		logger.Error(err, "unable to create or update ingress")
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if err := r.CreateOrUpdateClusterDeployment(ctx, cluster, secret); err != nil {
+	if err := r.CreateOrUpdateClusterDeployment(ctx, cluster, tokenSecret, redisSecret); err != nil {
 		logger.Error(err, "unable to create or update cluster deployment")
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if err := r.CreateOrUpdateWorkerDeployment(ctx, cluster, secret); err != nil {
+	if err := r.CreateOrUpdateClusterService(ctx, cluster); err != nil {
+		logger.Error(err, "unable to create or update service")
+
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	if err := r.CreateOrUpdateWorkerDeployment(ctx, cluster, tokenSecret); err != nil {
 		logger.Error(err, "unable to create or update worker deployment")
+
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	if err := r.CreateOrUpdateWorkerService(ctx, cluster); err != nil {
+		logger.Error(err, "unable to create or update worker service")
+
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	if err := r.CreateOrUpdateRedisDeployment(ctx, cluster, redisSecret); err != nil {
+		logger.Error(err, "unable to create or update redis deployment")
+
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	if err := r.CreateOrUpdateRedisService(ctx, cluster); err != nil {
+		logger.Error(err, "unable to create or update redis service")
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -361,9 +387,73 @@ func (r *ClusterReconciler) CreateOrUpdateIngress(ctx context.Context, new *netw
 	return nil
 }
 
-func (r *ClusterReconciler) GetOrCreateClusterSecret(ctx context.Context, cluster *webbrowsercloudv1.Cluster, result *corev1.Secret) error {
+// PVC
+
+func (r *ClusterReconciler) CreateOrUpdateUserDataPersistentVolumeClaim(ctx context.Context, cluster *webbrowsercloudv1.Cluster) error {
+	pvc := &corev1.PersistentVolumeClaim{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "PersistentVolumeClaim",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + "-userdata",
+			Namespace: cluster.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(cluster, schema.GroupVersionKind{
+					Group:   webbrowsercloudv1.GroupVersion.Group,
+					Version: webbrowsercloudv1.GroupVersion.Version,
+					Kind:    cluster.Kind,
+				}),
+			},
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: cluster.Spec.UserDataStorageSize,
+				},
+			},
+		},
+	}
+
+	return r.CreateOrUpdatePersistentVolumeClaim(ctx, pvc)
+}
+
+func (r *ClusterReconciler) CreateOrUpdateWorkspacePersistentVolumeClaim(ctx context.Context, cluster *webbrowsercloudv1.Cluster) error {
+	pvc := &corev1.PersistentVolumeClaim{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "PersistentVolumeClaim",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + "-workspace",
+			Namespace: cluster.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(cluster, schema.GroupVersionKind{
+					Group:   webbrowsercloudv1.GroupVersion.Group,
+					Version: webbrowsercloudv1.GroupVersion.Version,
+					Kind:    cluster.Kind,
+				}),
+			},
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: cluster.Spec.WorkspaceStorageSize,
+				},
+			},
+		},
+	}
+
+	return r.CreateOrUpdatePersistentVolumeClaim(ctx, pvc)
+}
+
+// Secret
+
+func (r *ClusterReconciler) GetOrCreateTokenSecret(ctx context.Context, cluster *webbrowsercloudv1.Cluster, result *corev1.Secret) error {
 	data := map[string][]byte{
-		"token": []byte(""),
+		"token": []byte(uuid.New().String()),
 	}
 
 	secret := &corev1.Secret{
@@ -387,6 +477,35 @@ func (r *ClusterReconciler) GetOrCreateClusterSecret(ctx context.Context, cluste
 
 	return r.GetOrCreateSecret(ctx, secret, result)
 }
+
+func (r *ClusterReconciler) GetOrCreateRedisSecret(ctx context.Context, cluster *webbrowsercloudv1.Cluster, result *corev1.Secret) error {
+	data := map[string][]byte{
+		"redis-password": []byte(uuid.New().String()),
+	}
+
+	secret := &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Secret",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + "-redis",
+			Namespace: cluster.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(cluster, schema.GroupVersionKind{
+					Group:   webbrowsercloudv1.GroupVersion.Group,
+					Version: webbrowsercloudv1.GroupVersion.Version,
+					Kind:    cluster.Kind,
+				}),
+			},
+		},
+		Data: data,
+	}
+
+	return r.GetOrCreateSecret(ctx, secret, result)
+}
+
+// RBAC
 
 func (r *ClusterReconciler) CreateOrUpdateClusterRole(ctx context.Context, cluster *webbrowsercloudv1.Cluster) error {
 	return r.CreateOrUpdateRole(ctx, &rbacv1.Role{
@@ -461,75 +580,12 @@ func (r *ClusterReconciler) CreateOrUpdateClusterServiceAccount(ctx context.Cont
 	})
 }
 
-func (r *ClusterReconciler) CreateOrUpdateClusterIngress(ctx context.Context, cluster *webbrowsercloudv1.Cluster) error {
-	if cluster.Spec.Domains == nil || len(*cluster.Spec.Domains) == 0 {
-		r.Delete(ctx, &networkingv1.Ingress{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "networking.k8s.io/v1",
-				Kind:       "Ingress",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      cluster.Name,
-				Namespace: cluster.Namespace,
-			},
-		})
+// Cluster
 
-		return nil
-	}
-
-	pathType := networkingv1.PathTypePrefix
-
-	var rules []networkingv1.IngressRule
-	for _, domain := range *cluster.Spec.Domains {
-		rules = append(rules, networkingv1.IngressRule{
-			Host: domain,
-			IngressRuleValue: networkingv1.IngressRuleValue{
-				HTTP: &networkingv1.HTTPIngressRuleValue{
-					Paths: []networkingv1.HTTPIngressPath{
-						{
-							Path:     "/",
-							PathType: &pathType,
-							Backend: networkingv1.IngressBackend{
-								Service: &networkingv1.IngressServiceBackend{
-									Name: cluster.Name,
-									Port: networkingv1.ServiceBackendPort{
-										Name: "http",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		})
-	}
-
-	return r.CreateOrUpdateIngress(ctx, &networkingv1.Ingress{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "networking.k8s.io/v1",
-			Kind:       "Ingress",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cluster.Name,
-			Namespace: cluster.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(cluster, schema.GroupVersionKind{
-					Group:   webbrowsercloudv1.GroupVersion.Group,
-					Version: webbrowsercloudv1.GroupVersion.Version,
-					Kind:    cluster.Kind,
-				}),
-			},
-		},
-		Spec: networkingv1.IngressSpec{
-			Rules: rules,
-		},
-	})
-
-}
-
-func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context, cluster *webbrowsercloudv1.Cluster, secret *corev1.Secret) error {
+func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context, cluster *webbrowsercloudv1.Cluster, tokenSecret *corev1.Secret, redisSecret *corev1.Secret) error {
 	annotations := map[string]string{
-		"webbrowser.cloud/secret-hash": secret.Annotations["webbrowser.cloud/last-updated-hash"],
+		"webbrowser.cloud/token-secret-hash": tokenSecret.Annotations["webbrowser.cloud/last-updated-hash"],
+		"webbrowser.cloud/redis-secret-hash": redisSecret.Annotations["webbrowser.cloud/last-updated-hash"],
 	}
 
 	labels := map[string]string{"app": cluster.Name, "component": "cluster"}
@@ -552,6 +608,21 @@ func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context,
 					Key: "token",
 					LocalObjectReference: corev1.LocalObjectReference{
 						Name: cluster.Name,
+					},
+				},
+			},
+		},
+		{
+			Name:  "REDIS_HOST",
+			Value: cluster.Name + "-cluster." + cluster.Namespace + ".svc",
+		},
+		{
+			Name: "REDIS_PASSWORD",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					Key: "redis-password",
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: cluster.Name + "-redis",
 					},
 				},
 			},
@@ -610,9 +681,7 @@ func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context,
 }
 
 func (r *ClusterReconciler) CreateOrUpdateClusterService(ctx context.Context, cluster *webbrowsercloudv1.Cluster) error {
-	labels := map[string]string{"app": cluster.Name}
-
-	selector := map[string]string{"app": cluster.Name, "component": "cluster"}
+	labels := map[string]string{"app": cluster.Name, "component": "cluster"}
 
 	service := &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
@@ -620,7 +689,7 @@ func (r *ClusterReconciler) CreateOrUpdateClusterService(ctx context.Context, cl
 			Kind:       "Service",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cluster.Name,
+			Name:      cluster.Name + "-cluster",
 			Namespace: cluster.Namespace,
 			Labels:    labels,
 			OwnerReferences: []metav1.OwnerReference{
@@ -632,7 +701,7 @@ func (r *ClusterReconciler) CreateOrUpdateClusterService(ctx context.Context, cl
 			},
 		},
 		Spec: corev1.ServiceSpec{
-			Selector: selector,
+			Selector: labels,
 			Ports: []corev1.ServicePort{{
 				Name:       "http",
 				Port:       80,
@@ -645,69 +714,11 @@ func (r *ClusterReconciler) CreateOrUpdateClusterService(ctx context.Context, cl
 	return r.CreateOrUpdateService(ctx, service)
 }
 
-func (r *ClusterReconciler) CreateOrUpdateUserDataPersistentVolumeClaim(ctx context.Context, cluster *webbrowsercloudv1.Cluster) error {
-	pvc := &corev1.PersistentVolumeClaim{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "PersistentVolumeClaim",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cluster.Name + "-userdata",
-			Namespace: cluster.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(cluster, schema.GroupVersionKind{
-					Group:   webbrowsercloudv1.GroupVersion.Group,
-					Version: webbrowsercloudv1.GroupVersion.Version,
-					Kind:    cluster.Kind,
-				}),
-			},
-		},
-		Spec: corev1.PersistentVolumeClaimSpec{
-			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
-			Resources: corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: cluster.Spec.UserDataStorageSize,
-				},
-			},
-		},
-	}
+// Worker
 
-	return r.CreateOrUpdatePersistentVolumeClaim(ctx, pvc)
-}
-
-func (r *ClusterReconciler) CreateOrUpdateWorkspacePersistentVolumeClaim(ctx context.Context, cluster *webbrowsercloudv1.Cluster) error {
-	pvc := &corev1.PersistentVolumeClaim{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "PersistentVolumeClaim",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cluster.Name + "-workspace",
-			Namespace: cluster.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(cluster, schema.GroupVersionKind{
-					Group:   webbrowsercloudv1.GroupVersion.Group,
-					Version: webbrowsercloudv1.GroupVersion.Version,
-					Kind:    cluster.Kind,
-				}),
-			},
-		},
-		Spec: corev1.PersistentVolumeClaimSpec{
-			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
-			Resources: corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: cluster.Spec.WorkspaceStorageSize,
-				},
-			},
-		},
-	}
-
-	return r.CreateOrUpdatePersistentVolumeClaim(ctx, pvc)
-}
-
-func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, cluster *webbrowsercloudv1.Cluster, secret *corev1.Secret) error {
+func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, cluster *webbrowsercloudv1.Cluster, tokenSecret *corev1.Secret) error {
 	annotations := map[string]string{
-		"webbrowser.cloud/secret-hash": secret.Annotations["webbrowser.cloud/last-updated-hash"],
+		"webbrowser.cloud/token-secret-hash": tokenSecret.Annotations["webbrowser.cloud/last-updated-hash"],
 	}
 
 	labels := map[string]string{
@@ -974,4 +985,218 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, 
 	}
 
 	return r.CreateOrUpdateDeployment(ctx, deployment)
+}
+
+func (r *ClusterReconciler) CreateOrUpdateWorkerService(ctx context.Context, cluster *webbrowsercloudv1.Cluster) error {
+	labels := map[string]string{"app": cluster.Name, "component": "worker"}
+
+	service := &corev1.Service{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Service",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + "-worker",
+			Namespace: cluster.Namespace,
+			Labels:    labels,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(cluster, schema.GroupVersionKind{
+					Group:   webbrowsercloudv1.GroupVersion.Group,
+					Version: webbrowsercloudv1.GroupVersion.Version,
+					Kind:    cluster.Kind,
+				}),
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: labels,
+			Ports: []corev1.ServicePort{{
+				Name:       "http",
+				Port:       3000,
+				Protocol:   "TCP",
+				TargetPort: intstr.IntOrString{IntVal: 3000},
+			}},
+		},
+	}
+
+	return r.CreateOrUpdateService(ctx, service)
+}
+
+// Redis
+
+func (r *ClusterReconciler) CreateOrUpdateRedisDeployment(ctx context.Context, cluster *webbrowsercloudv1.Cluster, secret *corev1.Secret) error {
+	annotations := map[string]string{
+		"webbrowser.cloud/secret-hash": secret.Annotations["webbrowser.cloud/last-updated-hash"],
+	}
+
+	labels := map[string]string{
+		"app":       cluster.Name,
+		"component": "redis",
+	}
+
+	selector := &metav1.LabelSelector{MatchLabels: labels}
+
+	env := []corev1.EnvVar{
+		{
+			Name: "REDIS_PASSWORD",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					Key: "redis-password",
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: cluster.Name + "-redis",
+					},
+				},
+			},
+		},
+	}
+
+	deployment := &appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "apps/v1",
+			Kind:       "Deployment",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + "-redis",
+			Namespace: cluster.Namespace,
+			Labels:    labels,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(cluster, schema.GroupVersionKind{
+					Group:   webbrowsercloudv1.GroupVersion.Group,
+					Version: webbrowsercloudv1.GroupVersion.Version,
+					Kind:    cluster.Kind,
+				}),
+			},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Selector: selector,
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: annotations,
+					Labels:      labels,
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:            "redis",
+							Image:           "bitnami/redis:7.0.2",
+							ImagePullPolicy: cluster.Spec.Redis.ImagePullPolicy,
+							Resources:       cluster.Spec.Redis.Resources,
+							Ports: []corev1.ContainerPort{
+								{
+									ContainerPort: 6379,
+									Protocol:      "TCP",
+									Name:          "redis",
+								},
+							},
+							Env: env,
+						},
+					},
+					ImagePullSecrets: cluster.Spec.Redis.ImagePullSecrets,
+				},
+			},
+		},
+	}
+
+	return r.CreateOrUpdateDeployment(ctx, deployment)
+}
+
+func (r *ClusterReconciler) CreateOrUpdateRedisService(ctx context.Context, cluster *webbrowsercloudv1.Cluster) error {
+	labels := map[string]string{"app": cluster.Name, "component": "redis"}
+
+	service := &corev1.Service{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Service",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + "-redis",
+			Namespace: cluster.Namespace,
+			Labels:    labels,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(cluster, schema.GroupVersionKind{
+					Group:   webbrowsercloudv1.GroupVersion.Group,
+					Version: webbrowsercloudv1.GroupVersion.Version,
+					Kind:    cluster.Kind,
+				}),
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: labels,
+			Ports: []corev1.ServicePort{{
+				Name:       "redis",
+				Port:       6379,
+				Protocol:   "TCP",
+				TargetPort: intstr.IntOrString{IntVal: 6379},
+			}},
+		},
+	}
+
+	return r.CreateOrUpdateService(ctx, service)
+}
+
+// Ingress
+
+func (r *ClusterReconciler) CreateOrUpdateClusterIngress(ctx context.Context, cluster *webbrowsercloudv1.Cluster) error {
+	if cluster.Spec.Domains == nil || len(*cluster.Spec.Domains) == 0 {
+		r.Delete(ctx, &networkingv1.Ingress{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "networking.k8s.io/v1",
+				Kind:       "Ingress",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      cluster.Name,
+				Namespace: cluster.Namespace,
+			},
+		})
+
+		return nil
+	}
+
+	pathType := networkingv1.PathTypePrefix
+
+	var rules []networkingv1.IngressRule
+	for _, domain := range *cluster.Spec.Domains {
+		rules = append(rules, networkingv1.IngressRule{
+			Host: domain,
+			IngressRuleValue: networkingv1.IngressRuleValue{
+				HTTP: &networkingv1.HTTPIngressRuleValue{
+					Paths: []networkingv1.HTTPIngressPath{
+						{
+							Path:     "/",
+							PathType: &pathType,
+							Backend: networkingv1.IngressBackend{
+								Service: &networkingv1.IngressServiceBackend{
+									Name: cluster.Name + "-cluster",
+									Port: networkingv1.ServiceBackendPort{
+										Name: "http",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		})
+	}
+
+	return r.CreateOrUpdateIngress(ctx, &networkingv1.Ingress{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "networking.k8s.io/v1",
+			Kind:       "Ingress",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name,
+			Namespace: cluster.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(cluster, schema.GroupVersionKind{
+					Group:   webbrowsercloudv1.GroupVersion.Group,
+					Version: webbrowsercloudv1.GroupVersion.Version,
+					Kind:    cluster.Kind,
+				}),
+			},
+		},
+		Spec: networkingv1.IngressSpec{
+			Rules: rules,
+		},
+	})
+
 }

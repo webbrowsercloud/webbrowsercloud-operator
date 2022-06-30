@@ -43,6 +43,18 @@ type WorkerSpec struct {
 	Autoscaling WorkerAutoscalingSpec `json:"autoscaling,omitempty"`
 }
 
+type RedisSpec struct {
+	Image string `json:"image,omitempty"`
+
+	ImagePullPolicy corev1.PullPolicy `json:"imagePullPolicy,omitempty"`
+
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+
+	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
+
+	Autoscaling WorkerAutoscalingSpec `json:"autoscaling,omitempty"`
+}
+
 // ClusterSpec defines the desired state of Cluster
 type ClusterSpec struct {
 	Image string `json:"image,omitempty"`
@@ -56,6 +68,8 @@ type ClusterSpec struct {
 	Domains *[]string `json:"domains,omitempty"`
 
 	Worker WorkerSpec `json:"worker,omitempty"`
+
+	Redis WorkerSpec `json:"redis,omitempty"`
 
 	MaxConcurrentSessions *int32 `json:"maxConcurrentSessions,omitempty"`
 
