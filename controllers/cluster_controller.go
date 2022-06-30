@@ -610,6 +610,8 @@ func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context,
 }
 
 func (r *ClusterReconciler) CreateOrUpdateClusterService(ctx context.Context, cluster *webbrowsercloudv1.Cluster) error {
+	labels := map[string]string{"app": cluster.Name}
+
 	selector := map[string]string{"app": cluster.Name, "component": "cluster"}
 
 	service := &corev1.Service{
@@ -620,6 +622,7 @@ func (r *ClusterReconciler) CreateOrUpdateClusterService(ctx context.Context, cl
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cluster.Name,
 			Namespace: cluster.Namespace,
+			Labels:    labels,
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(cluster, schema.GroupVersionKind{
 					Group:   webbrowsercloudv1.GroupVersion.Group,
