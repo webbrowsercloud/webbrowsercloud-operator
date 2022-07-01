@@ -918,7 +918,6 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, 
 			},
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: cluster.Spec.Worker.Autoscaling.MinReplicas,
 			Selector: selector,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
