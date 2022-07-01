@@ -959,6 +959,38 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, 
 								},
 							},
 						},
+						{
+							Name:  "exporter",
+							Image: "ghcr.io/webbrowsercloud/webbrowsercloud-worker-exporter:1.0.1",
+							Ports: []corev1.ContainerPort{
+								{
+									ContainerPort: 5000,
+									Protocol:      "TCP",
+									Name:          "exporter",
+								},
+							},
+							Env: []corev1.EnvVar{
+								{
+									Name:  "PORT",
+									Value: "5000",
+								},
+								{
+									Name:  "BROWSER_URL",
+									Value: "http://localhost:3000",
+								},
+								{
+									Name: "BROWSER_TOKEN",
+									ValueFrom: &corev1.EnvVarSource{
+										SecretKeyRef: &corev1.SecretKeySelector{
+											Key: "token",
+											LocalObjectReference: corev1.LocalObjectReference{
+												Name: cluster.Name,
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 					ImagePullSecrets: cluster.Spec.Worker.ImagePullSecrets,
 					Volumes: []corev1.Volume{
@@ -1011,12 +1043,20 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerService(ctx context.Context, clu
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: labels,
-			Ports: []corev1.ServicePort{{
-				Name:       "http",
-				Port:       3000,
-				Protocol:   "TCP",
-				TargetPort: intstr.IntOrString{IntVal: 3000},
-			}},
+			Ports: []corev1.ServicePort{
+				{
+					Name:       "http",
+					Port:       3000,
+					Protocol:   "TCP",
+					TargetPort: intstr.IntOrString{IntVal: 3000},
+				},
+				{
+					Name:       "exporter",
+					Port:       5000,
+					Protocol:   "TCP",
+					TargetPort: intstr.IntOrString{IntVal: 5000},
+				},
+			},
 		},
 	}
 
