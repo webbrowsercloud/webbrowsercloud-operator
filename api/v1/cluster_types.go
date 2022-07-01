@@ -41,6 +41,10 @@ type WorkerSpec struct {
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 
 	Autoscaling WorkerAutoscalingSpec `json:"autoscaling,omitempty"`
+
+	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+
+	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
 }
 
 type RedisSpec struct {
