@@ -614,7 +614,7 @@ func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context,
 		},
 		{
 			Name:  "REDIS_HOST",
-			Value: cluster.Name + "-cluster." + cluster.Namespace + ".svc",
+			Value: cluster.Name + "-redis." + cluster.Namespace + ".svc",
 		},
 		{
 			Name: "REDIS_PASSWORD",
