@@ -730,14 +730,6 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, 
 
 	env := []corev1.EnvVar{
 		{
-			Name: "HOST",
-			ValueFrom: &corev1.EnvVarSource{
-				FieldRef: &corev1.ObjectFieldSelector{
-					FieldPath: "status.podIP",
-				},
-			},
-		},
-		{
 			Name: "TOKEN",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
