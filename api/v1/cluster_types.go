@@ -77,7 +77,7 @@ type ClusterSpec struct {
 
 	MaxConcurrentSessions *int32 `json:"maxConcurrentSessions,omitempty"`
 
-	ConnectionTimeout *int32 `json:"connectionTimeout,omitempty"`
+	ConnectionTimeout *int64 `json:"connectionTimeout,omitempty"`
 
 	MaxQueueLength *int32 `json:"maxQueueLength,omitempty"`
 

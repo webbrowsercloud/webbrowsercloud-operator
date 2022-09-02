@@ -26,9 +26,8 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
-
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"context"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -602,17 +601,17 @@ func (r *ClusterReconciler) CreateOrUpdateClusterDeployment(ctx context.Context,
 				},
 			},
 		},
-		{
-			Name: "TOKEN",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					Key: "token",
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: cluster.Name,
-					},
-				},
-			},
-		},
+		// {
+		// 	Name: "TOKEN",
+		// 	ValueFrom: &corev1.EnvVarSource{
+		// 		SecretKeyRef: &corev1.SecretKeySelector{
+		// 			Key: "token",
+		// 			LocalObjectReference: corev1.LocalObjectReference{
+		// 				Name: cluster.Name,
+		// 			},
+		// 		},
+		// 	},
+		// },
 		{
 			Name:  "REDIS_HOST",
 			Value: cluster.Name + "-redis." + cluster.Namespace + ".svc",
@@ -731,16 +730,20 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, 
 
 	env := []corev1.EnvVar{
 		{
-			Name: "TOKEN",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					Key: "token",
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: cluster.Name,
-					},
-				},
-			},
+			Name:  "DEBUG",
+			Value: "*",
 		},
+		// {
+		// 	Name: "TOKEN",
+		// 	ValueFrom: &corev1.EnvVarSource{
+		// 		SecretKeyRef: &corev1.SecretKeySelector{
+		// 			Key: "token",
+		// 			LocalObjectReference: corev1.LocalObjectReference{
+		// 				Name: cluster.Name,
+		// 			},
+		// 		},
+		// 	},
+		// },
 		{
 			Name:  "WORKSPACE_DIR",
 			Value: "/workspace",
@@ -901,6 +904,8 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, 
 		})
 	}
 
+	terminationGracePeriodSeconds := *cluster.Spec.ConnectionTimeout / 1000
+
 	deployment := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "apps/v1",
@@ -1013,8 +1018,9 @@ func (r *ClusterReconciler) CreateOrUpdateWorkerDeployment(ctx context.Context, 
 							},
 						},
 					},
-					Affinity:    cluster.Spec.Worker.Affinity,
-					Tolerations: cluster.Spec.Worker.Tolerations,
+					Affinity:                      cluster.Spec.Worker.Affinity,
+					Tolerations:                   cluster.Spec.Worker.Tolerations,
+					TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
 				},
 			},
 		},

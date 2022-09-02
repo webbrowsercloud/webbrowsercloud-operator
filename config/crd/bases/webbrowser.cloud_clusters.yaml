@@ -39,7 +39,7 @@ spec:
                 format: int32
                 type: integer
               connectionTimeout:
-                format: int32
+                format: int64
                 type: integer
               defaultBlockAds:
                 type: boolean
